@@ -1,0 +1,434 @@
+<!doctype html>
+<html>
+	<head>
+		<title>curveExample</title>
+		<meta charset='utf-8' />
+        <link rel="stylesheet" type="text/css"  href="style.css">
+	</head>
+	<body>
+      <a id="header" href="http://www.mrs.irtc.org.ua/training/Lab_MRtravel/Lab_MRtravel_uk.htm">Robot model</a>
+      <div id='container'>
+      <div class='right block'>
+        <lable>speed:</lable>
+        <input id='speed' type="text" value="200">  
+        
+          <input type="button" id='rounds' value="Get commands">
+        <br>
+        <canvas id='canvas' >update browser</canvas>
+      </div>
+      <div class='left block'>
+        <label >Points: </label>  
+        <br>
+        <lable id='points'></lable>
+        <label >Get commands: </label>  
+        <br>
+        <lable id='commands'></lable>
+      </div>
+      </div>
+      <style>
+      #robot {
+    position:absolute;
+    width: 100px;
+    height: 100px;
+    z-index: 1;
+}
+#canvas {
+    border:2px solid #000000;
+    width: 504px;
+    height: 462px; 
+}
+.right {
+  width: 520px;
+  
+}
+
+.block {
+  display: inline-block;
+}
+#header {
+  text-align: center;
+}
+
+@media (min-width: 800px){
+  #container {
+  display: flex;
+}
+}
+      </style>   
+      
+      
+      
+      
+      <script>
+      var point = function(x=0,y=0){this.x = x,this.y = y};
+var round = function(x=0,y=0,radius=0){this.x = x,this.y = y,this.radius = radius};
+var robotPath = function(t=0,vl=0,vr=0){this.t = t,this.vl = vl,this.vr=vr};
+
+function Drower(canvasId,drowMath,drowRobot,k=0.04){
+  let points = [];  
+  let canvasWidth = 508;
+  let convasHeigth = 466;
+  const canvasElem = document.getElementById(canvasId);
+  let drowing = false;   
+  this.CanMakePath = function(point){
+    if(points.length !=0 ) {
+    const length = drowMath.GetLendth(point,points[points.length-1]);
+      console.log(length);
+      if(length<75)
+        return false;
+   // console.log(drowMath.GetAngle(point,point,points[points.length-1]))
+    if(points.length > 1){
+    let angle1 = drowMath.GetAngle(point,points[points.length-1]);
+    let angle2 = drowMath.GetAngle(points[points.length-2],points[points.length-1]);
+    let mainangle =0;
+    if((angle1<0 && angle2<0 )||(angle1> 0 && angle2>0 )){
+        mainangle = Math.abs(angle1-angle2);
+      } else  {
+        const angle1q = angle1<0 ? Math.PI*2+angle1: angle1
+        const angle2q = angle2<0 ? Math.PI*2+angle2: angle2
+        mainangle =  (Math.max(angle1q,angle2q)-Math.min(angle1q,angle2q));
+        mainangle = mainangle>Math.PI ? Math.abs(angle1-angle2) : mainangle;        
+      }  
+      console.log(mainangle)
+      if(Math.abs(mainangle) < Math.PI/5-length/500*Math.PI/7){
+        return false;
+      }     
+    }  
+      
+  }
+     return true;
+    
+   
+  }
+  this.AddPoint = function(point,drowLine =false){
+    if( Number.isInteger(point.x) && Number.isInteger(point.y)){
+      points.push(point);
+      if(points.length > 1) drawLine(points[points.length-2],points[points.length-1]);
+      drowPoint(points[points.length-1]);
+      return points.length;
+      
+    } else { 
+      return false; }
+  }
+  this.AddPoints = function(newPoints){
+    if(Array.isArray(newPoints)){
+      newPoints.forEach(function callback(element, index, array){
+        this.AddPoint(element)        
+      });
+        
+    } else {return false;}
+  }
+  this.getPoints = function(){return points;}
+  this.ResetPoints = function(){points = [];}
+  
+  this.Init = function(){
+    drowCanvas();
+  };
+  this.MakePath  = function(){   
+    
+    drowRobot.Rotate(drowMath.GetAngle(points[1],points[0]));
+    const rounds = drowMath.GetRounds(points,20);
+    const roundPoints = drowRobot.GetPath(points,rounds);
+    
+    let robotPathElem = new robotPath(drowMath.GetLendth(points[0],roundPoints[0])/drowRobot.robot.speed/k/6,
+                                  drowRobot.robot.speed,drowRobot.robot.speed);
+    drowRobot.robot.MoveLine(robotPathElem);
+    
+    for(let i =0; i<roundPoints.length-1; i+=2){
+      drowRobot.MakeCurvePath(roundPoints[i],roundPoints[i+1],rounds[i/2])
+      
+      if(roundPoints[i+2]==undefined) continue;
+      let length = drowMath.GetLendth(roundPoints[i+1],roundPoints[i+2])/drowRobot.robot.speed/k/6
+      robotPathElem = new robotPath(length-length*0.12
+                                    ,drowRobot.robot.speed,drowRobot.robot.speed);
+      drowRobot.robot.MoveLine(robotPathElem);
+    }
+    let length = (drowMath.GetLendth(roundPoints[roundPoints.length-1],points[points.length-1])/drowRobot.robot.speed/k/6)
+    
+    robotPathElem = new robotPath(length,drowRobot.robot.speed,drowRobot.robot.speed);
+    drowRobot.robot.MoveLine(robotPathElem);
+    
+   
+    return drowRobot.robot.GetRobotComands();
+  }
+  
+  function drawLine(point1,point2){
+    ctx = canvasElem.getContext('2d');
+    ctx.beginPath();
+    ctx.moveTo(point1.x,point1.y);
+    ctx.lineTo(point2.x,point2.y);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  function drowCanvas() {    
+    ctx = canvasElem.getContext('2d'); 
+    canvasElem.height = convasHeigth;
+    canvasElem.width  = canvasWidth;    
+}
+  function drowPoint(point) {    
+    ctx = canvasElem.getContext('2d'); 
+    ctx.fillRect(point.x-5,point.y-5,10,10)
+}
+  function drowRound(round){
+    
+    ctx = canvasElem.getContext('2d');
+    ctx.moveTo(round.x+round.radius,round.y)
+    ctx.arc(round.x, round.y, round.radius, (Math.PI/180)*0, (Math.PI/180)*360, false);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#003300';
+    ctx.stroke();
+    ctx.closePath();
+  }  
+}
+function DrowMath(){
+  this.Rounds = [];  
+  this.GetAngle = function(pointStart,pointEnd) {
+     const a1 = pointEnd.y-pointStart.y;      
+     const b1 = pointStart.x-pointEnd.x;
+     const ad = 0;
+     const bd = 1; 
+     let q = Math.pow(Math.pow(a1,2)+Math.pow(b1,2),0.5);
+     q = Math.abs(q) > 0.001 ? q : 1;
+     let ang1 = Math.acos((a1*ad+b1*bd)/q);
+     
+      
+     ang1 = pointStart.y-pointEnd.y > 0 ? -ang1 : ang1;
+   //console.log(ang1)
+    
+     return ang1;      
+  }
+  this.GetLendth = function(poinStart,PointEnd){
+    return Math.pow(Math.pow((poinStart.x-PointEnd.x),2)+Math.pow((poinStart.y-PointEnd.y),2),0.5);
+  }
+  this.GetRounds = function(points,radius){
+    rounds = [];
+    for(let i=0;i < points.length-2;i++){
+      const a1 = points[i].y-points[i+1].y;
+      const a2 = points[i+1].y-points[i+2].y;
+      const b1 = points[i+1].x-points[i].x;
+      const b2 = points[i+2].x-points[i+1].x;    
+      const ad = 0;
+      const bd = 10; 
+      let q1 = Math.pow(( Math.pow(a1,2)+Math.pow(b1,2)),0.5)*Math.pow(Math.pow(ad,2)+Math.pow(bd,2),0.5)
+      let q2 = Math.pow(( Math.pow(a2,2)+Math.pow(b2,2)),0.5)*Math.pow(Math.pow(ad,2)+Math.pow(bd,2),0.5)
+      q1 = Math.abs(q1) > 0.001 ? q1 : 1;
+      q2 = Math.abs(q2) > 0.001 ? q2 : 1;
+     
+      let ang1 = Math.PI - Math.acos((a1*ad+b1*bd)/q1);
+      ang1 = points[i+1].y-points[i].y > 0 ? -ang1 : ang1;
+      let ang2 = Math.acos((a2*ad+b2*bd)/q2);
+      ang2 = points[i+2].y-points[i+1].y > 0 ? ang2 : -ang2;
+      
+      let angle = (ang2-ang1)/2+ang1;
+      const Rlength =(radius/Math.sin((ang2-ang1)/2)) ; 
+      let side = (ang2-ang1)/2 < 0 ? -1 : 1; 
+      side = (ang2-ang1)/2 > Math.PI/2 ? -1*side:1*side;
+      side = (ang2-ang1)/2 < -Math.PI/2 ? -1*side:1*side;
+      
+      const senter = new point(points[i+1].x+Rlength*Math.cos(angle)*side,
+                               points[i+1].y+Rlength*Math.sin(angle)*side);
+      rounds.push(new round(senter.x,senter.y,radius));   
+       
+       
+     }
+     return rounds;
+  }
+}
+function DrowRobot(robot,canvasId,k,drowMath){
+  this.robot = robot
+  this.CurveSide = function(roundPoint1,roundPoint2,roundSenter,radius)  {
+    
+    // clock = 1  revers = -1 
+    let x1 = (roundPoint1.x-roundSenter.x);
+    let x2 = (roundPoint2.x-roundSenter.x);
+    let y1 = (roundPoint1.y-roundSenter.y);
+    let y2 = (roundPoint2.y-roundSenter.y);
+    //console.log(x1+" "+y1+" "+x2+" "+y2)
+    let quarter = {
+      '++':1,
+      '+-':2,
+      '--':3,
+      '-+':4 }
+    let point1qr = x1 >= 0 ? "+":"-";
+    point1qr += y1 >= 0 ? "+":"-";
+    
+    let point2qr = x2 >= 0 ? "+":"-";
+    point2qr += y2 >= 0 ? "+":"-";
+    
+    point1qr = quarter[point1qr];
+    point2qr = quarter[point2qr]
+     //console.log(point1qr+"  "+point2qr)
+    if(point1qr == point2qr) {
+        if(point1qr ==1) return  x1<x2 ? 1:-1; 
+        if(point1qr ==2) return  x1>x2 ? 1:-1;
+        if(point1qr ==3) return  x1>x2 ? 1:-1;
+        if(point1qr ==4) return  x1<x2 ? 1:-1;
+    } else {
+      
+      if((point1qr == 4 && point2qr == 1)||(point1qr == point2qr-1)) return 1;
+      if((point1qr == 1 && point2qr == 4)||(point1qr == point2qr+1)) return  -1;     
+      
+      
+     // if( ) return Math.abs((x1+x2)%radius**0.5) < Math.abs((x1-x2)%radius**0.5) ? 1:-1
+     // console.log(x1+"qwe")
+      //console.log(x2+"qwe")
+      if(point1qr == 4  || point1qr == 2) return Math.abs(x1) > Math.abs(x2) ?  -1:1
+      
+      if(point1qr == 3 ||point1qr ==1) return Math.abs(x1) > Math.abs(x2) ?  1:-1
+    }
+    
+  }
+  
+  this.GetPath = function (points,rounds){
+    retPoints = [];
+    for(let i = 0;i < points.length-2;i++){
+      let newPoint = getTangentPoint(points[i],points[i+1],rounds[i])
+      //console.log(newPoint)
+      retPoints.push(new round(newPoint.x,newPoint.y,20));
+      
+      newPoint = getTangentPoint(points[i+1],points[i+2],rounds[i])
+     // console.log(newPoint)
+      retPoints.push(new point(newPoint.x,newPoint.y));
+    }
+    return retPoints;
+  }
+  this.Rotate = function(angle){
+    this.robot.Rotate(angle);
+  }
+  this.MakeCurvePath = function(startPoint,endPoint,round){
+    //console.log(startPoint)
+    let angle1 = drowMath.GetAngle(startPoint,round);
+    let angle2 = drowMath.GetAngle(endPoint,round);
+    let mainangle =0;
+  //  console.log(angle1 +" "+angle2)
+    if((angle1<0 && angle2<0 )||(angle1> 0 && angle2>0 )){
+        mainangle = Math.abs(angle1-angle2);
+      } else  {
+        const angle1q = angle1<0 ? Math.PI*2+angle1: angle1
+        const angle2q = angle2<0 ? Math.PI*2+angle2: angle2
+        mainangle =  (Math.max(angle1q,angle2q)-Math.min(angle1q,angle2q));
+        mainangle = mainangle>Math.PI ? Math.abs(angle1-angle2) : mainangle;        
+      }     
+      console.log(mainangle)
+      let t = ((mainangle)*this.robot.width/2/this.robot.speed);
+    
+    const side = this.CurveSide(startPoint,endPoint,round,this.robot.width/2);
+      
+      let vl = side == 1 ? 0 : this.robot.speed*2; 
+      let vr = side == 1 ? this.robot.speed*2 : 0;    
+      t += 0.03 *mainangle/Math.PI*side
+      robotPathElem = new robotPath(t,vl,vr);
+      this.robot.MoveCurve(robotPathElem);
+  }
+  function getTangentPoint(startPont,endPont,round){
+  //  console.log(round);
+  //  console.log('roiund')
+    if(startPont.x-endPont.x == 0){
+      const xr = startPont.x;
+      const yr = round.y;
+      return new point(xr,yr);
+    }
+    const a1 = -(startPont.y-endPont.y)/(startPont.x-endPont.x);
+    
+    const c1 = (startPont.x*endPont.y-endPont.x*startPont.y)/(startPont.x-endPont.x);
+    const discrA = 1+Math.pow(a1,2);
+      
+      const discrB = (-2*round.x-2*a1*c1+2*a1*round.y)
+      const discrC = Math.pow(round.x,2)+Math.pow(c1,2)+Math.pow(round.y,2)-2*round.y*c1-Math.pow(round.radius,2);
+      const disctRoot =0 //(discrB**2-4*discrA*discrC)**0.5; //blet      
+      
+      const xr = (-discrB+disctRoot)/2/discrA;      
+      const yr = -a1*xr+c1; 
+      return new point(xr,yr);
+      
+  }
+}
+//all in mm/c   
+//mm/p = 0.024
+
+function Robot(width,position,speed,angle){ 
+  this.robotPathContainer = [];
+  this.width = width;
+  this.vl = speed/2;
+  this.vr = speed/2;
+  this.position = position;
+  this.speed = speed;
+  this.angle = angle;
+  const robot = this;
+  
+  this.MoveLine = function(robotPath){
+    this.vl = robotPath.vl;
+    this.vr = robotPath.vl;    
+    this.position.x = this.speed*Math.sin(this.angle)*robotPath.t;
+    this.position.y = this.speed*Math.cos(this.angle)*robotPath.t;
+    
+    this.robotPathContainer.push(robotPath);
+  }
+  this.MoveCurve = function(robotPath){
+    this.vl = robotPath.vl;
+    this.vr = robotPath.vr;
+    const side = this.vl == 0 ? -1 : 1;
+    const angle = side * Math.max(this.vl,this.vr)*robotPath.t*2/this.width;
+    this.robotPathContainer.push(robotPath);
+    this.angle +=angle;
+  }
+  this.Rotate = function(angle){    
+    const needAngle =Math.max(angle,this.angle)-Math.min(angle,this.angle);
+    const speedOneVeal = this.speed/2;
+    const t = (this.width/2*needAngle/speedOneVeal)- (needAngle/Math.PI*2*0.21);
+    
+    
+    const path = this.angle < angle ? new robotPath(t,-speedOneVeal,speedOneVeal) : new robotPath(t,speedOneVeal,-speedOneVeal);
+    this.robotPathContainer.push(path);
+    this.angle = needAngle;
+    return path;
+  }
+  this.GetRobotComands = function(){
+    let fullPathComnds = "";
+    for(let i=0;i<this.robotPathContainer.length;i++){
+    fullPathComnds += "dt="+this.robotPathContainer[i].t.toFixed(3)
+                    +",vl="+this.robotPathContainer[i].vl
+                    +",vr="+this.robotPathContainer[i].vr
+                    +",al=700,ar=700;\n" 
+    }
+    return fullPathComnds;
+  }   
+}
+
+const canvasElem = document.getElementById('canvas');
+const k=0.024;
+const robot = new Robot(382.5,{x:0,y:0},200,0);
+const dRobot = new DrowRobot(robot,'canvas',k,new DrowMath());
+let firstPoint;
+drower = new Drower('canvas',new DrowMath(), dRobot,k);
+drower.Init();
+const roundsButton = document.getElementById("rounds");
+roundsButton.onclick = function(evemt){
+  robot.robotPathContainer = [];
+  let speed = parseInt(document.getElementById('speed').value);
+  speed = speed == NaN || speed > 250  || speed < 0 ? 200 : speed;
+  const commands = drower.MakePath().split('\n').join("<br>");  
+  
+  const commandsElem = document.getElementById('commands')
+  commandsElem.innerHTML = commands; 
+}
+canvasElem.onclick = function(event) {   
+    const canvasOffset = canvasElem.getBoundingClientRect();  
+    const point = {x:parseInt(event.pageX-canvasOffset.left),y:parseInt(event.pageY-canvasOffset.top)};
+  if(drower.CanMakePath(point))  {
+    const pointCount = drower.AddPoint(point,true);
+    const pointsElem = document.getElementById('points');    
+    if(!firstPoint) firstPoint = point;
+    points.innerHTML += pointCount+") x: "+Number(point.x-firstPoint.x)+" y: "+Number(firstPoint.y-point.y)+"<br>";
+  } else { alert('can`t make path') }
+}
+
+
+
+
+
+      </script>
+       
+	</body>
+</html>
